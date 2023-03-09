@@ -56,12 +56,12 @@ public class CommandProcess {
     public Pair<Integer, List<String>> execute(String[] env, String command) {
         Process process = null;
         try {
-            log.info("execute starting command:{}", command);
+            log.debug("execute starting command:{}", command);
             //执行终端命令
             process = Runtime.getRuntime().exec(analysisCommand(command), env);
             List<String> result = streamExport(process);
             int i = process.waitFor();
-            log.info("execute completed command:{}", command);
+            log.debug("execute completed command:{}", command);
             return Pair.of(i, result);
         } catch (IOException | InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -71,19 +71,19 @@ public class CommandProcess {
                 process.destroy();
             }
         }
-        log.info("execute fail command:{}", command);
+        log.error("execute fail command:{}", command);
         return Pair.of(-1, new ArrayList<>());
     }
 
     public Integer executeStepping(String[] env, String command) {
         Process process = null;
         try {
-            log.info("execute starting command:{}", command);
+            log.debug("execute starting command:{}", command);
             //执行终端命令
             process = Runtime.getRuntime().exec(analysisCommand(command), env);
             streamExportStepping(process);
             int i = process.waitFor();
-            log.info("execute completed command:{}", command);
+            log.debug("execute completed command:{}", command);
             return i;
         } catch (IOException | InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -93,7 +93,7 @@ public class CommandProcess {
                 process.destroy();
             }
         }
-        log.info("execute fail command:{}", command);
+        log.error("execute fail command:{}", command);
         return -1;
     }
 
@@ -158,7 +158,9 @@ public class CommandProcess {
                 String line;
                 while ((line = read.readLine()) != null) {
                     System.out.println(line);
+                    log.info("process:{}",line);
                 }
+
             } catch (Exception ignore) {
             }
         });
@@ -167,6 +169,7 @@ public class CommandProcess {
                 String lineError;
                 while ((lineError = readError.readLine()) != null) {
                     System.err.println(lineError);
+                    log.error("process:{}",lineError);
                 }
             } catch (Exception ignore) {
             }

@@ -1,5 +1,6 @@
 package me.zzpp.dynamic.core.handler;
 
+import com.sun.tools.javac.resources.compiler;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.zzpp.dynamic.core.DynamicClassLoader;
@@ -43,7 +44,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     }
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType, String cmdPath) {
-        this.cmd = cmdPath + "/javac";
+        this.cmd = cmdPath;
         this.compilerType = compilerType;
     }
 
@@ -72,6 +73,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         log.info("loadClass，compile {},start", className);
         log.info("loadClass，compile code: \n{}", javaCode);
         File file = FileUtils.createTempFileWithFileNameAndContent(className, ".java", javaCode.getBytes());
+        cacheClass.remove(className);
         Compiler compiler;
         if (CompilerType.Javac == compilerType) {
             compiler = new JavacCompiler();
@@ -227,6 +229,8 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
         @Override
         public void compiler(String className, File file) {
+            File classFile = new File(file.getParent(), className + ".class");
+            classFile.delete();
             String execute;
             if (null == classPaths || classPaths.isEmpty()) {
                 execute = cmdPath + " -encoding utf-8 " + file.getAbsolutePath();
@@ -242,7 +246,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
             CommandProcess commandProcess = new CommandProcess();
             Integer integer = commandProcess.executeStepping(execute);
             log.info("java compiler result:{}", integer);
-            boolean exists = new File(file.getParent(), className + ".class").exists();
+            boolean exists = classFile.exists();
             if (!exists) {
                 throw new RuntimeException(String.format("动态编译失败，className %s ,path:%s", className, file.getParentFile()));
             }
