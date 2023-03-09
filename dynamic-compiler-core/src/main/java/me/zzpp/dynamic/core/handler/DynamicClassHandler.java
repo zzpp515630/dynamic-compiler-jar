@@ -1,6 +1,8 @@
 package me.zzpp.dynamic.core.handler;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,12 +16,29 @@ public interface DynamicClassHandler {
      */
     Class<?> loadClass(String javaCode) throws Exception;
 
+
+
+    /**
+     * @param classPaths 源码jar地址
+     * @param javaCode  java代码
+     * @return
+     */
+    Class<?> loadClass(List<String> classPaths, String javaCode);
+
     /**
      * @param className beanName（同时也是classname），注意:beanName必须与javaCode中的className保持一致
      * @param javaCode  java代码
      * @throws Exception
      */
     Class<?> loadClass(String className, String javaCode) throws Exception;
+
+    /**
+     * @param className beanName（同时也是classname），注意:beanName必须与javaCode中的className保持一致
+     * @param classPaths 源码jar地址
+     * @param javaCode  java代码
+     * @return
+     */
+    Class<?> loadClass(String className, List<String> classPaths, String javaCode);
 
     /**
      * 无参方法执行

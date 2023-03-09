@@ -4,9 +4,13 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.zzpp.dynamic.core.DynamicClassLoader;
 import me.zzpp.dynamic.core.utils.FileUtils;
+import me.zzpp.dynamic.core.utils.Platform;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.reflect.MethodUtils;
 
 import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
+import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
@@ -14,6 +18,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,6 +32,12 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     public Class<?> loadClass(String javaCode) {
         String className = getClassName(javaCode);
         return loadClass(className, javaCode);
+    }
+
+    @Override
+    public Class<?> loadClass(List<String> classPaths, String javaCode) {
+        String className = getClassName(javaCode);
+        return loadClass(className, classPaths, javaCode);
     }
 
     @SneakyThrows
@@ -42,8 +54,45 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
             throw new RuntimeException(String.format("动态编译失败，className %s", className));
         }
         log.info("loadClass {} loader start, to {}", className, file.getParent());
-        URL[] urls = new URL[]{new URL("file:/" + file.getParent() + "/")};
+//        URL[] urls = new URL[]{new URL("file:/" + file.getParent() + "/")};
+        URL[] urls = new URL[]{file.getParentFile().toURI().toURL()};
         try (URLClassLoader loader = new DynamicClassLoader(urls, Thread.currentThread().getContextClassLoader());) {
+            Class<?> c = loader.loadClass(className);
+            log.info("loadClass {} loader end", className);
+            cacheClass.put(className, c);
+            return c;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @SneakyThrows
+    @Override
+    public Class<?> loadClass(String className, List<String> classPaths, String javaCode) {
+        log.info("loadClass，compile {},start", className);
+        log.info("loadClass，compile code: \n{}", javaCode);
+        File file = FileUtils.createTempFileWithFileNameAndContent(className, ".java", javaCode.getBytes());
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null);
+        Iterable<? extends JavaFileObject> javaFileObjects = fileManager.getJavaFileObjects(file);
+        String classPath;
+        if (Platform.isWindows()) {
+            classPath = String.join(";", classPaths);
+        } else {
+            classPath = String.join(":", classPaths);
+        }
+        List<String> options = Arrays.asList("-encoding", "utf-8", "-cp", classPath);
+        log.debug("loadClass，compile options:\n{}", options);
+        JavaCompiler.CompilationTask compilationTask = compiler.getTask(null, fileManager, null, options, null, javaFileObjects);
+        Boolean call = compilationTask.call();
+        if (BooleanUtils.isTrue(call)) {
+            log.info("{} {}", className, "-编译成功");
+        } else {
+            throw new RuntimeException(String.format("动态编译失败，className %s", className));
+        }
+        log.info("loadClass {} loader start, to {}", className, file.getParent());
+        URL[] urls = new URL[]{file.getParentFile().toURI().toURL()};
+        try (URLClassLoader loader = new DynamicClassLoader(urls, Thread.currentThread().getContextClassLoader())) {
             Class<?> c = loader.loadClass(className);
             log.info("loadClass {} loader end", className);
             cacheClass.put(className, c);
@@ -66,7 +115,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         Class<?> aClass = cacheClass.get(className);
         return invoke(aClass, methodName, parameterTypes, args);
     }
-    
+
     @Override
     public Object invoke(Class<?> clz, String methodName) {
         try {
