@@ -2,6 +2,9 @@ package me.zzpp.dynamic.spring.handler;
 
 import java.lang.reflect.InvocationTargetException;
 
+/**
+ * 动态编译bean接口
+ */
 public interface DynamicBeanHandler {
 
 

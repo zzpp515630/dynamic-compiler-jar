@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 import java.lang.reflect.InvocationTargetException;
 
 /**
- * @author zhangpeng
+ * 动态编译bean接口实现
+ * @author zzpp
  * @create 2023/1/18 18:01
  */
 @Component

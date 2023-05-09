@@ -22,6 +22,9 @@
  */
 package me.zzpp.dynamic.core.utils;
 
+/**
+ * 判断操作系统
+ */
 /** Provide simplified platform information. */
 public final class Platform {
     public static final int UNSPECIFIED = -1;

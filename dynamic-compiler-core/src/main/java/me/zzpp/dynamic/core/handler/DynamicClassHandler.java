@@ -9,6 +9,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 动态编译实现接口
+ *
+ * @author zzpp
+ */
 public interface DynamicClassHandler {
 
 
@@ -28,12 +33,23 @@ public interface DynamicClassHandler {
     /**
      * 将java源码编译并加载class，自定义lib包路径
      *
-     * @param classPaths 源码jar地址
+     * @param classLibPaths 源码jar地址
      * @param javaCode   java代码
      * @return class
      * @return
      */
-    Class<?> loadClass(List<String> classPaths, String javaCode);
+    Class<?> loadClass(List<String> classLibPaths, String javaCode);
+
+
+    /**
+     * 将java源码编译并加载class，自定义lib包路径
+     *
+     * @param classLibFile 依赖包目录
+     * @param javaCode  java代码
+     * @return class
+     * @return
+     */
+    Class<?> loadClass(File classLibFile, String javaCode);
 
     /**
      * 将java源码编译并加载class
@@ -49,11 +65,11 @@ public interface DynamicClassHandler {
      * 将java源码编译并加载class，自定义lib包路径
      *
      * @param className  className（同时也是classname），注意:className必须与javaCode中的className保持一致
-     * @param classPaths 源码jar地址
+     * @param classLibPaths 源码jar地址
      * @param javaCode   java代码
      * @return class
      */
-    Class<?> loadClass(String className, List<String> classPaths, String javaCode);
+    Class<?> loadClass(String className, List<String> classLibPaths, String javaCode);
 
     /**
      * 将java源码编译并加载class，自定义lib包路径

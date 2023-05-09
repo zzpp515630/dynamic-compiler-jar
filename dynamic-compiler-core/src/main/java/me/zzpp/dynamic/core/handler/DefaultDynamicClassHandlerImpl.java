@@ -15,6 +15,7 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -24,6 +25,11 @@ import java.net.URLClassLoader;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 动态编译实现接口实现
+ *
+ * @author zzpp
+ */
 @Slf4j
 public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
@@ -49,7 +55,6 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         this.compilerType = compilerType;
     }
 
-
     @Override
     public Class<?> loadClass(String javaCode) {
         String className = getClassName(javaCode);
@@ -57,12 +62,17 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     }
 
     @Override
-    public Class<?> loadClass(List<String> classPaths, String javaCode) {
+    public Class<?> loadClass(List<String> classLibPaths, String javaCode) {
         String className = getClassName(javaCode);
-        return loadClass(className, classPaths, javaCode);
+        return loadClass(className, classLibPaths, javaCode);
     }
 
-    @SneakyThrows
+    @Override
+    public Class<?> loadClass(File classLibFile, String javaCode) {
+        String className = getClassName(javaCode);
+        return loadClass(className, classLibFile, javaCode);
+    }
+
     @Override
     public Class<?> loadClass(String className, String javaCode) {
         return loadClass(className, new ArrayList<>(), javaCode);
@@ -70,45 +80,45 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     @SneakyThrows
     @Override
-    public Class<?> loadClass(String className, File classPathFile, String javaCode) {
-        List<String> libJarPath = new ArrayList<>();
-        if (classPathFile.isDirectory()) {
-            File[] files = classPathFile.listFiles();
-            if (null != files) {
-                for (File file : files) {
-                    if (file.getName().endsWith(".jar")) {
-                        libJarPath.add(file.getAbsolutePath());
-                    }
-                }
-            }
+    public Class<?> loadClass(String className, List<String> classLibPaths, String javaCode) {
+        Compiler compiler;
+        if (CompilerType.Javac == compilerType) {
+            compiler = new JavacCompiler();
+        } else if (CompilerType.Task == compilerType) {
+            compiler = new ClassPathCompiler(classLibPaths);
+        } else if (CompilerType.Cmd == compilerType) {
+            compiler = new CmdCompiler(cmd, classLibPaths);
         } else {
-            if (classPathFile.getName().endsWith(".jar")) {
-                libJarPath.add(classPathFile.getAbsolutePath());
-            }
+            throw new RuntimeException("不支持的类型");
         }
-        return loadClass(className, libJarPath, javaCode);
+        return loadClass(compiler, className, javaCode);
     }
 
 
     @SneakyThrows
     @Override
-    public synchronized Class<?> loadClass(String className, List<String> classPaths, String javaCode) {
-        log.info("loadClass，compile {},start", className);
-        log.debug("loadClass，compile code: \n{}", javaCode);
-        String packageName = getPackageName(javaCode);
-        File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
-        //删除缓存
-        if (isCache) cacheClass.remove(className);
+    public Class<?> loadClass(String className, File cleasFile, String javaCode) {
         Compiler compiler;
         if (CompilerType.Javac == compilerType) {
             compiler = new JavacCompiler();
         } else if (CompilerType.Task == compilerType) {
-            compiler = new ClassPathCompiler(classPaths);
+            compiler = new ClassPathCompiler(cleasFile);
         } else if (CompilerType.Cmd == compilerType) {
-            compiler = new CmdCompiler(cmd, classPaths);
+            compiler = new CmdCompiler(cmd, cleasFile);
         } else {
             throw new RuntimeException("不支持的类型");
         }
+        return loadClass(compiler, className, javaCode);
+    }
+
+    private synchronized Class<?> loadClass(Compiler compiler, String className, String javaCode) throws IOException {
+        log.info("loadClass，compile {},start", className);
+        log.debug("loadClass，compile code: \n{}", javaCode);
+
+        String packageName = getPackageName(javaCode);
+        File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
+        //删除缓存
+        if (isCache) cacheClass.remove(className);
         //获取新的包名
         String newClassName = getClassName(packageName, className);
         //编译class
@@ -119,7 +129,6 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         if (isCache) cacheClass.put(className, aClass);
         return aClass;
     }
-
 
     @Override
     public Object invoke(String className, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
@@ -227,10 +236,21 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     private static class ClassPathCompiler implements Compiler {
 
-        private final List<String> classPaths;
+        private final List<String> classLibPaths;
 
-        public ClassPathCompiler(List<String> classPaths) {
-            this.classPaths = classPaths;
+        private final File classLibFile;
+
+        private ClassPathCompiler(File classLibFile, List<String> classLibPaths) {
+            this.classLibPaths = classLibPaths;
+            this.classLibFile = classLibFile;
+        }
+
+        public ClassPathCompiler(List<String> classLibPaths) {
+            this(null, classLibPaths);
+        }
+
+        public ClassPathCompiler(File classLibFile) {
+            this(classLibFile, null);
         }
 
         @Override
@@ -238,13 +258,18 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
             JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
             StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null);
             Iterable<? extends JavaFileObject> javaFileObjects = fileManager.getJavaFileObjects(file);
-            String classPath;
-            if (Platform.isWindows()) {
-                classPath = String.join(";", classPaths);
+            List<String> options;
+            if (null != classLibFile) {
+                options = Arrays.asList("-encoding", "utf-8", "-Djava.ext.dirs=", classLibFile.getAbsolutePath());
             } else {
-                classPath = String.join(":", classPaths);
+                String classPath;
+                if (Platform.isWindows()) {
+                    classPath = String.join(";", classLibPaths);
+                } else {
+                    classPath = String.join(":", classLibPaths);
+                }
+                options = Arrays.asList("-encoding", "utf-8", "-cp", classPath);
             }
-            List<String> options = Arrays.asList("-encoding", "utf-8", "-cp", classPath);
             log.debug("loadClass，compile options:\n{}", options);
             javax.tools.JavaCompiler.CompilationTask compilationTask = compiler.getTask(null, fileManager, null, options, null, javaFileObjects);
             Boolean call = compilationTask.call();
@@ -274,11 +299,13 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
         private final String cmdPath;
 
-        private final List<String> classPaths;
+        private final List<String> classLibPaths;
 
-        public CmdCompiler(String cmdPath, List<String> classPaths) {
-            this.classPaths = classPaths;
+        private final File classLibFile;
 
+        private CmdCompiler(String cmdPath, File classLibFile, List<String> classLibPaths) {
+            this.classLibPaths = classLibPaths;
+            this.classLibFile = classLibFile;
             if (null == cmdPath || "".equals(cmdPath)) {
                 this.cmdPath = "javac";
             } else {
@@ -291,6 +318,14 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
             }
         }
 
+        public CmdCompiler(String cmdPath, List<String> classLibPaths) {
+            this(cmdPath, null, classLibPaths);
+        }
+
+        public CmdCompiler(String cmdPath, File classLibFile) {
+            this(cmdPath, classLibFile, null);
+        }
+
 
         @Override
         public void compiler(String className, File file) {
@@ -298,14 +333,16 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
             boolean delete = classFile.delete();
             log.info("java compiler init delete {} is {}", classFile.getAbsolutePath(), delete);
             String execute;
-            if (null == classPaths || classPaths.isEmpty()) {
+            if ((null == classLibPaths || classLibPaths.isEmpty()) && classLibFile == null) {
                 execute = cmdPath + " -encoding utf-8 " + file.getAbsolutePath();
+            } else if (null != classLibFile) {
+                execute = cmdPath + " -encoding utf-8 -Djava.ext.dirs=" + classLibFile.getAbsolutePath() + " " + file.getAbsolutePath();
             } else {
                 String classPath;
                 if (Platform.isWindows()) {
-                    classPath = String.join(";", classPaths);
+                    classPath = String.join(";", classLibPaths);
                 } else {
-                    classPath = String.join(":", classPaths);
+                    classPath = String.join(":", classLibPaths);
                 }
                 execute = cmdPath + " -encoding utf-8 -cp " + classPath + " " + file.getAbsolutePath();
             }

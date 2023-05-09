@@ -9,7 +9,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 /**
- * @author zhangpeng
+ * 动态编译获取spring环境
+ * @author zzpp
  * @create 2023/1/19 9:10
  */
 @Component
