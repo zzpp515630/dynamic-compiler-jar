@@ -41,6 +41,9 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType) {
         this.compilerType = compilerType;
+        if(compilerType == CompilerType.Cmd){
+            this.cmd = "javac";
+        }
     }
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType, String cmdPath) {
