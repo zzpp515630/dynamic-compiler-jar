@@ -1,5 +1,7 @@
 package me.zzpp.dynamic.spring.handler;
 
+import me.zzpp.dynamic.core.handler.DynamicClassHandler;
+
 import java.lang.reflect.InvocationTargetException;
 
 /**
@@ -7,6 +9,11 @@ import java.lang.reflect.InvocationTargetException;
  */
 public interface DynamicBeanHandler {
 
+    /**
+     * 后去动态编译实例对象
+     * @return
+     */
+    DynamicClassHandler getClassHandler();
 
     /**
      * @param javaCode java代码

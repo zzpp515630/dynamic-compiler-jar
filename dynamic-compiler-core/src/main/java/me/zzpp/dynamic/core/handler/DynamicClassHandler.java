@@ -6,8 +6,6 @@ import lombok.Data;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 动态编译实现接口
@@ -16,11 +14,34 @@ import java.util.regex.Pattern;
  */
 public interface DynamicClassHandler {
 
+    /**
+     * 设置是否启用class缓存，默认开启
+     *
+     * @param isCache
+     */
+    void setCache(boolean isCache);
 
-    String REX_NAME = "class[\\s*](.*?)[\\s*].*\\{?";
-//    String REX_NAME = "class[\\s*](.*?)[\\s*]";
+    /**
+     * 设置class的lib地址
+     *
+     * @param classLibPaths
+     */
+    void setClassLibPaths(List<String> classLibPaths);
 
-    String PACKAGE_NAME = "package?(.*)\\;";
+    /**
+     * 设置class的lib目录
+     *
+     * @param classLibFile
+     */
+    void setClassLibFile(File classLibFile);
+
+    /**
+     * 设置javac命令的命令地址
+     *
+     * @param cmdPath
+     */
+    void setCmd(String cmdPath);
+
 
     /**
      * 将java源码编译并加载class
@@ -29,6 +50,16 @@ public interface DynamicClassHandler {
      * @throws Exception
      */
     Class<?> loadClass(String javaCode) throws Exception;
+
+    /**
+     * 将java源码编译并加载class
+     *
+     * @param className className（同时也是classname），注意:className必须与javaCode中的className保持一致
+     * @param javaCode  java代码
+     * @return class
+     * @throws Exception
+     */
+    Class<?> loadClass(String className, String javaCode) throws Exception;
 
 
     /**
@@ -52,35 +83,26 @@ public interface DynamicClassHandler {
      */
     Class<?> loadClass(File classLibFile, String javaCode);
 
-    /**
-     * 将java源码编译并加载class
-     *
-     * @param className className（同时也是classname），注意:className必须与javaCode中的className保持一致
-     * @param javaCode  java代码
-     * @return class
-     * @throws Exception
-     */
-    Class<?> loadClass(String className, String javaCode) throws Exception;
 
-    /**
-     * 将java源码编译并加载class，自定义lib包路径
-     *
-     * @param className     className（同时也是classname），注意:className必须与javaCode中的className保持一致
-     * @param classLibPaths 源码jar地址
-     * @param javaCode      java代码
-     * @return class
-     */
-    Class<?> loadClass(String className, List<String> classLibPaths, String javaCode);
-
-    /**
-     * 将java源码编译并加载class，自定义lib包路径
-     *
-     * @param className     className（同时也是classname），注意:className必须与javaCode中的className保持一致
-     * @param classPathFile 源码lib目录
-     * @param javaCode      java代码
-     * @return class
-     */
-    Class<?> loadClass(String className, File classPathFile, String javaCode);
+//    /**
+//     * 将java源码编译并加载class，自定义lib包路径
+//     *
+//     * @param className     className（同时也是classname），注意:className必须与javaCode中的className保持一致
+//     * @param classLibPaths 源码jar地址
+//     * @param javaCode      java代码
+//     * @return class
+//     */
+//    Class<?> loadClass(String className, List<String> classLibPaths, String javaCode);
+//
+//    /**
+//     * 将java源码编译并加载class，自定义lib包路径
+//     *
+//     * @param className     className（同时也是classname），注意:className必须与javaCode中的className保持一致
+//     * @param classPathFile 源码lib目录
+//     * @param javaCode      java代码
+//     * @return class
+//     */
+//    Class<?> loadClass(String className, File classPathFile, String javaCode);
 
     /**
      * 无参方法执行,通过内部class缓存
@@ -90,18 +112,6 @@ public interface DynamicClassHandler {
      * @return
      */
     Object invoke(String className, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
-
-
-    /**
-     * 有参方法执行,通过内部class缓存.自动匹配参数类型，class必须完全相等
-     *
-     * @param className
-     * @param methodName
-     * @param args       demo : new Object[]{value}
-     * @return
-     */
-    Object invoke(String className, String methodName, Object... args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
-
 
     /**
      * 有参方法执行,通过内部class缓存.自动匹配参数类型，需要传方法的参数类型，方法的参数，两者必须完全匹配
@@ -114,7 +124,6 @@ public interface DynamicClassHandler {
      */
     Object invoke(String className, String methodName, Class<?>[] parameterTypes, Object[] args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
 
-
     /**
      * 无参方法执行，通过class对象
      *
@@ -123,16 +132,6 @@ public interface DynamicClassHandler {
      * @return
      */
     Object invoke(Class<?> clz, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
-
-    /**
-     * 有参方法执行,通过内部class实例.自动匹配参数类型，class必须完全相等
-     *
-     * @param clz
-     * @param methodName
-     * @param args       demo : new Object[]{value}
-     * @return
-     */
-    Object invoke(Class<?> clz, String methodName, Object... args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
 
     /**
      * 有参方法执行,通过内部class对象.自动匹配参数类型，需要传方法的参数类型，方法的参数，两者必须完全匹配
@@ -159,67 +158,6 @@ public interface DynamicClassHandler {
      */
     Object invoke(Class<?> clz, String methodName, InvokeArgs constructorArgs, InvokeArgs methodArgs) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
 
-    default String replaceClassName(String className, String javaCode) {
-        Pattern pattern = Pattern.compile(REX_NAME);
-        Matcher matcher = pattern.matcher(javaCode);
-        boolean find = matcher.find();
-        if (find) {
-            StringBuilder buffer = new StringBuilder();
-            buffer.append(javaCode, 0, matcher.start(1));
-            buffer.append(className);
-            buffer.append(javaCode.substring(matcher.end(1)));
-            return buffer.toString();
-        }
-        return javaCode;
-    }
-
-    /**
-     * 获取源码的class名称
-     *
-     * @param javaCode
-     * @return
-     */
-    default String getClassName(String javaCode) {
-        Pattern pattern = Pattern.compile(REX_NAME);
-        Matcher matcher = pattern.matcher(javaCode);
-        boolean find = matcher.find(0);
-        if (find) {
-            return matcher.group().replaceAll(REX_NAME, "$1").trim();
-        }
-        throw new RuntimeException("java code 不合法");
-    }
-
-    /**
-     * 获取源码的package名称
-     *
-     * @param javaCode
-     * @return
-     */
-    default String getPackageName(String javaCode) {
-        Pattern pattern = Pattern.compile(PACKAGE_NAME);
-        Matcher matcher = pattern.matcher(javaCode);
-        boolean find = matcher.find(0);
-        if (find) {
-            return matcher.group().replaceAll(PACKAGE_NAME, "$1").trim();
-        }
-        return "";
-    }
-
-
-    /**
-     * 获取className;
-     *
-     * @param packageName
-     * @param className
-     * @return
-     */
-    default String getClassName(String packageName, String className) {
-        if (null != packageName && !"".equals(packageName)) {
-            return packageName + "." + className;
-        } else {
-            return className;
-        }
-    }
 
     enum CompilerType {
 
@@ -228,7 +166,6 @@ public interface DynamicClassHandler {
         Javac,
 
         Cmd,
-
         ;
     }
 
@@ -236,8 +173,14 @@ public interface DynamicClassHandler {
     @Data
     @Builder
     class InvokeArgs {
+        /**
+         * 参数类型
+         */
         private Class<?>[] parameterTypes;
 
+        /**
+         * 参数
+         */
         private Object[] args;
     }
 }

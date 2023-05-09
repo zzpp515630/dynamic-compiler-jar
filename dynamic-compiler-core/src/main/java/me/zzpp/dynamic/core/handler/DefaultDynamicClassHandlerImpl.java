@@ -5,6 +5,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.zzpp.dynamic.core.DynamicClassLoader;
 import me.zzpp.dynamic.core.utils.CommandProcess;
+import me.zzpp.dynamic.core.utils.DynamicClassUtils;
 import me.zzpp.dynamic.core.utils.FileUtils;
 import me.zzpp.dynamic.core.utils.Platform;
 import org.apache.commons.lang3.BooleanUtils;
@@ -33,12 +34,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
+    @Setter
+    private boolean isCache = true;
+
+    @Setter
+    private List<String> classLibPaths;
+
+    @Setter
+    private File classLibFile;
+
+    @Setter
     private String cmd;
 
     private final CompilerType compilerType;
-
-    @Setter
-    private boolean isCache = true;
 
     private final Map<String, Class<?>> cacheClass = new ConcurrentHashMap<>();
 
@@ -57,29 +65,35 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     @Override
     public Class<?> loadClass(String javaCode) {
-        String className = getClassName(javaCode);
+        String className = DynamicClassUtils.getClassName(javaCode);
         return loadClass(className, javaCode);
     }
 
     @Override
     public Class<?> loadClass(List<String> classLibPaths, String javaCode) {
-        String className = getClassName(javaCode);
+        String className = DynamicClassUtils.getClassName(javaCode);
         return loadClass(className, classLibPaths, javaCode);
     }
 
     @Override
     public Class<?> loadClass(File classLibFile, String javaCode) {
-        String className = getClassName(javaCode);
+        String className = DynamicClassUtils.getClassName(javaCode);
         return loadClass(className, classLibFile, javaCode);
     }
 
     @Override
     public Class<?> loadClass(String className, String javaCode) {
-        return loadClass(className, new ArrayList<>(), javaCode);
+        if (null != this.classLibFile) {
+            return loadClass(className, this.classLibFile, javaCode);
+        } else if (null != this.classLibPaths) {
+            return loadClass(className, this.classLibPaths, javaCode);
+        } else {
+            return loadClass(className, new ArrayList<>(), javaCode);
+        }
     }
 
+    //    @Override
     @SneakyThrows
-    @Override
     public Class<?> loadClass(String className, List<String> classLibPaths, String javaCode) {
         Compiler compiler;
         if (CompilerType.Javac == compilerType) {
@@ -95,8 +109,8 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     }
 
 
+    //    @Override
     @SneakyThrows
-    @Override
     public Class<?> loadClass(String className, File cleasFile, String javaCode) {
         Compiler compiler;
         if (CompilerType.Javac == compilerType) {
@@ -111,28 +125,6 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         return loadClass(compiler, className, javaCode);
     }
 
-    private synchronized Class<?> loadClass(Compiler compiler, String className, String javaCode) throws IOException {
-        log.info("loadClass，compile {},start", className);
-        log.debug("loadClass，compile code: \n{}", javaCode);
-        String javaName = getClassName(javaCode);
-        if (!javaName.equals(className)) {
-            javaCode = replaceClassName(className, javaCode);
-        }
-        String packageName = getPackageName(javaCode);
-        File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
-        //删除缓存
-        if (isCache) cacheClass.remove(className);
-        //获取新的包名
-        String newClassName = getClassName(packageName, className);
-        //编译class
-        compiler.compiler(newClassName, file);
-        //加载class
-        Class<?> aClass = loadClass(newClassName, file);
-        //写入缓存
-        if (isCache) cacheClass.put(className, aClass);
-        return aClass;
-    }
-
     @Override
     public Object invoke(String className, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         if (find(className)) return null;
@@ -140,7 +132,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         return invoke(aClass, methodName, InvokeArgs.builder().build(), null);
     }
 
-    @Override
+    //    @Override
     public Object invoke(String className, String methodName, Object[] args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         if (find(className)) return null;
         Class<?> aClass = cacheClass.get(className);
@@ -159,7 +151,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         return invoke(clz, methodName, InvokeArgs.builder().build(), null);
     }
 
-    @Override
+    //    @Override
     public Object invoke(Class<?> clz, String methodName, Object... args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         Method[] declaredMethods = clz.getDeclaredMethods();
         Optional<Class<?>[]> first = Arrays.stream(declaredMethods)
@@ -211,6 +203,28 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         }
     }
 
+    private synchronized Class<?> loadClass(Compiler compiler, String className, String javaCode) throws IOException {
+        log.info("loadClass，compile {},start", className);
+        log.debug("loadClass，compile code: \n{}", javaCode);
+        String javaName = DynamicClassUtils.getClassName(javaCode);
+        if (!javaName.equals(className)) {
+            javaCode = DynamicClassUtils.replaceClassName(className, javaCode);
+        }
+        String packageName = DynamicClassUtils.getPackageName(javaCode);
+        File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
+        //删除缓存
+        if (isCache) cacheClass.remove(className);
+        //获取新的包名
+        String newClassName = DynamicClassUtils.getClassName(packageName, className);
+        //编译class
+        compiler.compiler(newClassName, file);
+        //加载class
+        Class<?> aClass = loadClass(newClassName, file);
+        //写入缓存
+        if (isCache) cacheClass.put(className, aClass);
+        return aClass;
+    }
+
     private boolean find(String className) {
         if (!cacheClass.containsKey(className)) {
             return true;
@@ -252,6 +266,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
         /**
          * 编译
+         *
          * @param className
          * @param file
          */
