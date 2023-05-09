@@ -17,7 +17,8 @@ import java.util.regex.Pattern;
 public interface DynamicClassHandler {
 
 
-    String REX_NAME = "class\\s*(.*)\\s*\\{";
+    String REX_NAME = "class[\\s*](.*?)[\\s*].*\\{?";
+//    String REX_NAME = "class[\\s*](.*?)[\\s*]";
 
     String PACKAGE_NAME = "package?(.*)\\;";
 
@@ -34,7 +35,7 @@ public interface DynamicClassHandler {
      * 将java源码编译并加载class，自定义lib包路径
      *
      * @param classLibPaths 源码jar地址
-     * @param javaCode   java代码
+     * @param javaCode      java代码
      * @return class
      * @return
      */
@@ -45,7 +46,7 @@ public interface DynamicClassHandler {
      * 将java源码编译并加载class，自定义lib包路径
      *
      * @param classLibFile 依赖包目录
-     * @param javaCode  java代码
+     * @param javaCode     java代码
      * @return class
      * @return
      */
@@ -64,9 +65,9 @@ public interface DynamicClassHandler {
     /**
      * 将java源码编译并加载class，自定义lib包路径
      *
-     * @param className  className（同时也是classname），注意:className必须与javaCode中的className保持一致
+     * @param className     className（同时也是classname），注意:className必须与javaCode中的className保持一致
      * @param classLibPaths 源码jar地址
-     * @param javaCode   java代码
+     * @param javaCode      java代码
      * @return class
      */
     Class<?> loadClass(String className, List<String> classLibPaths, String javaCode);
@@ -157,6 +158,20 @@ public interface DynamicClassHandler {
      * @throws IllegalAccessException
      */
     Object invoke(Class<?> clz, String methodName, InvokeArgs constructorArgs, InvokeArgs methodArgs) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
+
+    default String replaceClassName(String className, String javaCode) {
+        Pattern pattern = Pattern.compile(REX_NAME);
+        Matcher matcher = pattern.matcher(javaCode);
+        boolean find = matcher.find();
+        if (find) {
+            StringBuilder buffer = new StringBuilder();
+            buffer.append(javaCode, 0, matcher.start(1));
+            buffer.append(className);
+            buffer.append(javaCode.substring(matcher.end(1)));
+            return buffer.toString();
+        }
+        return javaCode;
+    }
 
     /**
      * 获取源码的class名称

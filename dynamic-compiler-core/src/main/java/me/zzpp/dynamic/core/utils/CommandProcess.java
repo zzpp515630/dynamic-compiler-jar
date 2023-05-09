@@ -157,7 +157,7 @@ public class CommandProcess {
             try (BufferedReader read = new BufferedReader(new InputStreamReader(process.getInputStream(), Charset.forName(charsets)))) {
                 String line;
                 while ((line = read.readLine()) != null) {
-                    System.out.println(line);
+                    System.out.println("process sout:"+line);
                     log.info("process:{}",line);
                 }
 
@@ -168,7 +168,7 @@ public class CommandProcess {
             try (BufferedReader readError = new BufferedReader(new InputStreamReader(process.getErrorStream(), Charset.forName(charsets)));) {
                 String lineError;
                 while ((lineError = readError.readLine()) != null) {
-                    System.err.println(lineError);
+                    System.err.println("process serr:"+lineError);
                     log.error("process:{}",lineError);
                 }
             } catch (Exception ignore) {

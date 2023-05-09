@@ -114,7 +114,10 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     private synchronized Class<?> loadClass(Compiler compiler, String className, String javaCode) throws IOException {
         log.info("loadClass，compile {},start", className);
         log.debug("loadClass，compile code: \n{}", javaCode);
-
+        String javaName = getClassName(javaCode);
+        if (!javaName.equals(className)) {
+            javaCode = replaceClassName(className, javaCode);
+        }
         String packageName = getPackageName(javaCode);
         File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
         //删除缓存
@@ -228,30 +231,44 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         }
     }
 
-    interface Compiler {
+    abstract static class Compiler {
 
-        void compiler(String className, File file);
+        protected final List<String> classLibPaths;
 
-    }
+        protected final File classLibFile;
 
-    private static class ClassPathCompiler implements Compiler {
-
-        private final List<String> classLibPaths;
-
-        private final File classLibFile;
-
-        private ClassPathCompiler(File classLibFile, List<String> classLibPaths) {
+        private Compiler(File classLibFile, List<String> classLibPaths) {
             this.classLibPaths = classLibPaths;
             this.classLibFile = classLibFile;
         }
 
-        public ClassPathCompiler(List<String> classLibPaths) {
+        public Compiler(List<String> classLibPaths) {
             this(null, classLibPaths);
         }
 
-        public ClassPathCompiler(File classLibFile) {
+        public Compiler(File classLibFile) {
             this(classLibFile, null);
         }
+
+        /**
+         * 编译
+         * @param className
+         * @param file
+         */
+        abstract void compiler(String className, File file);
+
+    }
+
+    private static class ClassPathCompiler extends Compiler {
+
+        public ClassPathCompiler(List<String> classLibPaths) {
+            super(classLibPaths);
+        }
+
+        public ClassPathCompiler(File classLibFile) {
+            super(classLibFile);
+        }
+
 
         @Override
         public void compiler(String className, File file) {
@@ -281,7 +298,11 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         }
     }
 
-    private static class JavacCompiler implements Compiler {
+    private static class JavacCompiler extends Compiler {
+
+        public JavacCompiler() {
+            super(null, null);
+        }
 
         @Override
         public void compiler(String className, File file) {
@@ -295,17 +316,12 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         }
     }
 
-    private static class CmdCompiler implements Compiler {
+    private static class CmdCompiler extends Compiler {
 
         private final String cmdPath;
 
-        private final List<String> classLibPaths;
-
-        private final File classLibFile;
-
         private CmdCompiler(String cmdPath, File classLibFile, List<String> classLibPaths) {
-            this.classLibPaths = classLibPaths;
-            this.classLibFile = classLibFile;
+            super(classLibFile, classLibPaths);
             if (null == cmdPath || "".equals(cmdPath)) {
                 this.cmdPath = "javac";
             } else {
@@ -325,7 +341,6 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         public CmdCompiler(String cmdPath, File classLibFile) {
             this(cmdPath, classLibFile, null);
         }
-
 
         @Override
         public void compiler(String className, File file) {

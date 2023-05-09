@@ -51,6 +51,13 @@ public class FileUtils {
         return file;
     }
 
+    /**
+     * 从jar中提取lib包并存放到指定位置
+     * @param jarPath
+     * @param destinationDir
+     * @return
+     * @throws IOException
+     */
     public static File jarToLib(String jarPath, String destinationDir) throws IOException {
         File jarFile = new File(jarPath);
 
@@ -60,8 +67,8 @@ public class FileUtils {
         boolean tempMkdirs = tempFileDir.mkdirs();
         log.info("jarToLib temp path:【{}】 mkdirs:【{}】", tempFileDir.getAbsolutePath(), tempMkdirs);
         if (desFile.exists()) {
-            boolean delete = desFile.delete();
-            log.info("jarToLib destinationDir  path:【{}】 delete【{}】", desFile.getAbsolutePath(), delete);
+//            boolean delete = desFile.delete();
+//            log.info("jarToLib destinationDir  path:【{}】 delete【{}】", desFile.getAbsolutePath(), delete);
         }
         boolean mkdirs = desFile.mkdirs();
         log.info("jarToLib destinationDir path:【{}】 mkdirs【{}】", desFile.getAbsolutePath(), mkdirs);
