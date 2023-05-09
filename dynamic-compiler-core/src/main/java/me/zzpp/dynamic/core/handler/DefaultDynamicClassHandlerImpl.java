@@ -1,6 +1,6 @@
 package me.zzpp.dynamic.core.handler;
 
-import com.sun.tools.javac.resources.compiler;
+import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.zzpp.dynamic.core.DynamicClassLoader;
@@ -21,9 +21,7 @@ import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -33,6 +31,9 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     private final CompilerType compilerType;
 
+    @Setter
+    private boolean isCache = true;
+
     private final Map<String, Class<?>> cacheClass = new ConcurrentHashMap<>();
 
     public DefaultDynamicClassHandlerImpl() {
@@ -41,9 +42,6 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType) {
         this.compilerType = compilerType;
-        if(compilerType == CompilerType.Cmd){
-            this.cmd = "javac";
-        }
     }
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType, String cmdPath) {
@@ -67,16 +65,40 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     @SneakyThrows
     @Override
     public Class<?> loadClass(String className, String javaCode) {
-        return loadClass(className, null, javaCode);
+        return loadClass(className, new ArrayList<>(), javaCode);
     }
 
     @SneakyThrows
     @Override
-    public Class<?> loadClass(String className, List<String> classPaths, String javaCode) {
+    public Class<?> loadClass(String className, File classPathFile, String javaCode) {
+        List<String> libJarPath = new ArrayList<>();
+        if (classPathFile.isDirectory()) {
+            File[] files = classPathFile.listFiles();
+            if (null != files) {
+                for (File file : files) {
+                    if (file.getName().endsWith(".jar")) {
+                        libJarPath.add(file.getAbsolutePath());
+                    }
+                }
+            }
+        } else {
+            if (classPathFile.getName().endsWith(".jar")) {
+                libJarPath.add(classPathFile.getAbsolutePath());
+            }
+        }
+        return loadClass(className, libJarPath, javaCode);
+    }
+
+
+    @SneakyThrows
+    @Override
+    public synchronized Class<?> loadClass(String className, List<String> classPaths, String javaCode) {
         log.info("loadClass，compile {},start", className);
-        log.info("loadClass，compile code: \n{}", javaCode);
-        File file = FileUtils.createTempFileWithFileNameAndContent(className, ".java", javaCode.getBytes());
-        cacheClass.remove(className);
+        log.debug("loadClass，compile code: \n{}", javaCode);
+        String packageName = getPackageName(javaCode);
+        File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
+        //删除缓存
+        if (isCache) cacheClass.remove(className);
         Compiler compiler;
         if (CompilerType.Javac == compilerType) {
             compiler = new JavacCompiler();
@@ -87,16 +109,30 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         } else {
             throw new RuntimeException("不支持的类型");
         }
-        compiler.compiler(className, file);
-        return loadClass(className, file);
+        //获取新的包名
+        String newClassName = getClassName(packageName, className);
+        //编译class
+        compiler.compiler(newClassName, file);
+        //加载class
+        Class<?> aClass = loadClass(newClassName, file);
+        //写入缓存
+        if (isCache) cacheClass.put(className, aClass);
+        return aClass;
     }
 
 
     @Override
-    public Object invoke(String className, String methodName) {
+    public Object invoke(String className, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         if (find(className)) return null;
         Class<?> aClass = cacheClass.get(className);
-        return invoke(aClass, methodName);
+        return invoke(aClass, methodName, InvokeArgs.builder().build(), null);
+    }
+
+    @Override
+    public Object invoke(String className, String methodName, Object[] args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+        if (find(className)) return null;
+        Class<?> aClass = cacheClass.get(className);
+        return invoke(aClass, methodName, args);
     }
 
     @Override
@@ -107,35 +143,52 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     }
 
     @Override
-    public Object invoke(Class<?> clz, String methodName) {
-        try {
-            Method method = clz.getDeclaredMethod(methodName);
-            int modifiers = method.getModifiers();
-            if (Modifier.isStatic(modifiers)) {
-                return MethodUtils.invokeExactStaticMethod(clz, methodName);
-            } else {
-                Object obj = clz.getDeclaredConstructor().newInstance();
-                return MethodUtils.invokeExactMethod(obj, methodName);
-            }
-        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-            log.info("execute method failed，{}::{}", clz.getSimpleName(), methodName);
-            log.error("execute method errMsg : {}", e.getMessage(), e);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        }
-        return null;
+    public Object invoke(Class<?> clz, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+        return invoke(clz, methodName, InvokeArgs.builder().build(), null);
+    }
+
+    @Override
+    public Object invoke(Class<?> clz, String methodName, Object... args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+        Method[] declaredMethods = clz.getDeclaredMethods();
+        Optional<Class<?>[]> first = Arrays.stream(declaredMethods)
+                .filter(x -> x.getName().equals(methodName))
+                .filter(x -> {
+                    Class<?>[] parameterTypes = x.getParameterTypes();
+                    if (parameterTypes.length == args.length) {
+                        for (int i = 0; i < args.length; i++) {
+                            Object arg = args[i];
+                            Object parameterType = parameterTypes[i];
+                            if (!arg.getClass().equals(parameterType.getClass())) {
+                                return true;
+                            }
+                        }
+                        return true;
+                    }
+                    return false;
+                }).map(Method::getParameterTypes).findFirst();
+        Class<?>[] parameterTypes = first.orElse(new Class[0]);
+        InvokeArgs invokeArgs = InvokeArgs.builder().parameterTypes(parameterTypes).args(args).build();
+        return invoke(clz, methodName, null, invokeArgs);
     }
 
     @Override
     public Object invoke(Class<?> clz, String methodName, Class<?>[] parameterTypes, Object[] args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+        InvokeArgs invokeArgs = InvokeArgs.builder().parameterTypes(parameterTypes).args(args).build();
+        return invoke(clz, methodName, null, invokeArgs);
+    }
+
+    @Override
+    public Object invoke(Class<?> clz, String methodName, InvokeArgs constructorArgs, InvokeArgs methodArgs) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         try {
-            Method method = clz.getDeclaredMethod(methodName);
+            InvokeArgs invokeMethodArgs = Optional.ofNullable(methodArgs).orElse(InvokeArgs.builder().build());
+            Method method = clz.getDeclaredMethod(methodName, invokeMethodArgs.getParameterTypes());
             int modifiers = method.getModifiers();
             if (Modifier.isStatic(modifiers)) {
-                return MethodUtils.invokeExactStaticMethod(clz, methodName, args, parameterTypes);
+                return MethodUtils.invokeExactStaticMethod(clz, methodName, invokeMethodArgs.getArgs(), invokeMethodArgs.getParameterTypes());
             } else {
-                Object obj = clz.getDeclaredConstructor(parameterTypes).newInstance(args);
-                return MethodUtils.invokeExactMethod(obj, methodName, methodName, args, parameterTypes);
+                InvokeArgs invokeConstructorArgs = Optional.ofNullable(constructorArgs).orElse(InvokeArgs.builder().build());
+                Object obj = clz.getDeclaredConstructor(invokeConstructorArgs.getParameterTypes()).newInstance(invokeConstructorArgs.getArgs());
+                return MethodUtils.invokeExactMethod(obj, methodName, invokeMethodArgs.getArgs(), invokeMethodArgs.getParameterTypes());
             }
         } catch (NoSuchMethodException | IllegalAccessException e) {
             log.info("execute method failed，{}::{}", clz.getSimpleName(), methodName);
@@ -160,7 +213,6 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         try (URLClassLoader loader = new DynamicClassLoader(urls, Thread.currentThread().getContextClassLoader())) {
             Class<?> c = loader.loadClass(className);
             log.info("loadClass {} loader end", className);
-            cacheClass.put(className, c);
             return c;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -225,15 +277,26 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
         private final List<String> classPaths;
 
         public CmdCompiler(String cmdPath, List<String> classPaths) {
-            this.cmdPath = (null == cmdPath || "".equals(cmdPath)) ? "javac" : (cmdPath + "/javac");
             this.classPaths = classPaths;
+
+            if (null == cmdPath || "".equals(cmdPath)) {
+                this.cmdPath = "javac";
+            } else {
+                File file = new File(cmdPath);
+                if (file.isDirectory()) {
+                    this.cmdPath = new File(file, "javac").getAbsolutePath();
+                } else {
+                    this.cmdPath = file.getAbsolutePath();
+                }
+            }
         }
 
 
         @Override
         public void compiler(String className, File file) {
-            File classFile = new File(file.getParent(), className + ".class");
-            classFile.delete();
+            File classFile = new File(file.getAbsolutePath().replace(".java", ".class"));
+            boolean delete = classFile.delete();
+            log.info("java compiler init delete {} is {}", classFile.getAbsolutePath(), delete);
             String execute;
             if (null == classPaths || classPaths.isEmpty()) {
                 execute = cmdPath + " -encoding utf-8 " + file.getAbsolutePath();
