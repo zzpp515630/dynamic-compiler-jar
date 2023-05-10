@@ -1,6 +1,7 @@
 package me.zzpp.dynamic.core.utils;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -25,34 +26,36 @@ public class FileUtils {
     /**
      * 创建java文件
      *
-     * @param packageName
-     * @param className
-     * @param suffix
-     * @param content
-     * @return
+     * @param packageName 包名
+     * @param className   class名称
+     * @param dir         目录名
+     * @param content     java源码
+     * @return Pair<File, File> 临时跟目录，java目录
      * @throws IOException
      */
-    public static File createTempFileWithFileNameAndContent(String packageName, String className, String suffix, byte[] content) throws IOException {
+    public static Pair<File, File> createTempFileWithFileNameAndContent(String packageName, String className, String dir, byte[] content) throws IOException {
         String tempDir = System.getProperty("java.io.tmpdir");
-        File file;
+        File tempFile = new File(tempDir, dir);
+        File fileDes;
         if (null != packageName && !"".equals(packageName)) {
             String packagePath = packageName.replace(".", "/");
-            File fileDes = new File(tempDir, packagePath);
-            boolean mkdirs = fileDes.mkdirs();
-            log.info("create package directory {}", mkdirs);
-            file = new File(fileDes, className.concat(suffix));
+            fileDes = new File(tempFile, packagePath);
         } else {
-            file = new File(tempDir, className.concat(suffix));
+            fileDes = tempFile;
         }
+        boolean mkdirs = fileDes.mkdirs();
+        log.info("create package directory path:{} is {}", mkdirs,fileDes.getAbsolutePath());
+        File file = new File(fileDes, className.concat(".java"));
         OutputStream os = Files.newOutputStream(file.toPath());
         os.write(content, 0, content.length);
         os.flush();
         os.close();
-        return file;
+        return Pair.of(tempFile, file);
     }
 
     /**
      * 从jar中提取lib包并存放到指定位置
+     *
      * @param jarPath
      * @param destinationDir
      * @return
@@ -160,7 +163,7 @@ public class FileUtils {
                 compress(sourceFile, zos, sourceFile.getName());
             }
             long end = System.currentTimeMillis();//结束
-           log.debug("压缩完成，耗时：" + (end - start) + " 毫秒");
+            log.debug("压缩完成，耗时：" + (end - start) + " 毫秒");
         } catch (Exception e) {
             e.printStackTrace();
         }

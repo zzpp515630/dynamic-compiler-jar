@@ -10,6 +10,7 @@ import me.zzpp.dynamic.core.utils.FileUtils;
 import me.zzpp.dynamic.core.utils.Platform;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.reflect.MethodUtils;
+import org.apache.commons.lang3.tuple.Pair;
 
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
@@ -33,6 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
+    /**
+     * 创建后生成
+     */
+    private final String UUID_DIR =  "java-dynamic-".concat(UUID.randomUUID().toString().replace("-", "").substring(0, 32));
 
     @Setter
     private boolean isCache = true;
@@ -51,16 +56,17 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     private final Map<String, Class<?>> cacheClass = new ConcurrentHashMap<>();
 
     public DefaultDynamicClassHandlerImpl() {
-        this.compilerType = CompilerType.Task;
+       this(CompilerType.Task,null);
     }
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType) {
-        this.compilerType = compilerType;
+        this(compilerType,null);
     }
 
     public DefaultDynamicClassHandlerImpl(CompilerType compilerType, String cmdPath) {
         this.cmd = cmdPath;
         this.compilerType = compilerType;
+        log.info("dynamic-class-handler uid:{} initialized successfully...",UUID_DIR);
     }
 
     @Override
@@ -211,15 +217,15 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
             javaCode = DynamicClassUtils.replaceClassName(className, javaCode);
         }
         String packageName = DynamicClassUtils.getPackageName(javaCode);
-        File file = FileUtils.createTempFileWithFileNameAndContent(packageName, className, ".java", javaCode.getBytes());
+        Pair<File, File> pair = FileUtils.createTempFileWithFileNameAndContent(packageName, className, UUID_DIR, javaCode.getBytes());
         //删除缓存
         if (isCache) cacheClass.remove(className);
         //获取新的包名
         String newClassName = DynamicClassUtils.getClassName(packageName, className);
         //编译class
-        compiler.compiler(newClassName, file);
+        compiler.compiler(newClassName, pair.getValue());
         //加载class
-        Class<?> aClass = loadClass(newClassName, file);
+        Class<?> aClass = loadClass(newClassName, pair.getKey());
         //写入缓存
         if (isCache) cacheClass.put(className, aClass);
         return aClass;
@@ -235,7 +241,7 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
 
     private Class<?> loadClass(String className, File file) throws MalformedURLException {
         log.info("loadClass {} loader start, to {}", className, file.getParent());
-        URL[] urls = new URL[]{file.getParentFile().toURI().toURL()};
+        URL[] urls = new URL[]{file.toURI().toURL()};
         try (URLClassLoader loader = new DynamicClassLoader(urls, Thread.currentThread().getContextClassLoader())) {
             Class<?> c = loader.loadClass(className);
             log.info("loadClass {} loader end", className);
