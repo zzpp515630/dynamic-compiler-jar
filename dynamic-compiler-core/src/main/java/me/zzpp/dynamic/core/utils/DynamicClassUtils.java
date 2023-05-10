@@ -14,7 +14,7 @@ public class DynamicClassUtils {
     static final String REX_NAME = "class[\\s*](.*?)[\\s*].*\\{?";
 //    String REX_NAME = "class[\\s*](.*?)[\\s*]";
 
-    static final  String PACKAGE_NAME = "package?(.*)\\;";
+    static final  String PACKAGE_NAME = "package?(.*?);";
 
     /**
      * 替换className

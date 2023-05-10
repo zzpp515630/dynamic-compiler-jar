@@ -2,6 +2,7 @@ package me.zzpp.dynamic.core;
 
 import me.zzpp.dynamic.core.handler.DefaultDynamicClassHandlerImpl;
 import me.zzpp.dynamic.core.handler.DynamicClassHandler;
+import me.zzpp.dynamic.core.utils.DynamicClassUtils;
 
 /**
  * test
@@ -14,13 +15,14 @@ public class DynamicClassTest {
     private static final DynamicClassHandler dynamicClassHandler = new DefaultDynamicClassHandlerImpl(DynamicClassHandler.CompilerType.Cmd);
 
     public static void main(String[] args) throws Exception {
+        System.out.println(DynamicClassUtils.getPackageName(testJavaCode));
         Class<?> aClass = dynamicClassHandler.loadClass("Test",testJavaCode);
         Object invoke = dynamicClassHandler.invoke("Test", "getName", new Class[]{String.class}, new Object[]{"test"});
         System.out.println(invoke);
     }
 
 
-    private static String testJavaCode = "" +
+    private static String testJavaCode = "package me.zzpp.dynamic.core.utils;import me.zzpp.dynamic.core.utils.DynamicClassUtils;" +
             "public class Test {\n" +
             "\n" +
             "    public String getName(String str){\n" +
