@@ -111,7 +111,7 @@ public interface DynamicClassHandler {
      * @param methodName
      * @return
      */
-    Object invoke(String className, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
+    Object invoke(String className, String methodName);
 
     /**
      * 有参方法执行,通过内部class缓存.自动匹配参数类型，需要传方法的参数类型，方法的参数，两者必须完全匹配
@@ -122,7 +122,7 @@ public interface DynamicClassHandler {
      * @param args           demo : new Object[]{value}
      * @return
      */
-    Object invoke(String className, String methodName, Class<?>[] parameterTypes, Object[] args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
+    Object invoke(String className, String methodName, Class<?>[] parameterTypes, Object[] args);
 
     /**
      * 无参方法执行，通过class对象
@@ -131,7 +131,7 @@ public interface DynamicClassHandler {
      * @param methodName
      * @return
      */
-    Object invoke(Class<?> clz, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException;
+    Object invoke(Class<?> clz, String methodName);
 
     /**
      * 有参方法执行,通过内部class对象.自动匹配参数类型，需要传方法的参数类型，方法的参数，两者必须完全匹配

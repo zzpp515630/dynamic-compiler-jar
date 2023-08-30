@@ -44,7 +44,7 @@ public class FileUtils {
             fileDes = tempFile;
         }
         boolean mkdirs = fileDes.mkdirs();
-        log.info("create package directory path:{} is {}", mkdirs,fileDes.getAbsolutePath());
+        log.info("create package directory path:{} is {}", mkdirs, fileDes.getAbsolutePath());
         File file = new File(fileDes, className.concat(".java"));
         OutputStream os = Files.newOutputStream(file.toPath());
         os.write(content, 0, content.length);
@@ -62,8 +62,8 @@ public class FileUtils {
      * @throws IOException
      */
     public static File jarToLib(String jarPath, String destinationDir) throws IOException {
+        long start = System.currentTimeMillis();
         File jarFile = new File(jarPath);
-
         File desFile = new File(destinationDir);
         String tempDir = System.getProperty("java.io.tmpdir");
         File tempFileDir = new File(tempDir, UUID.randomUUID().toString());
@@ -98,7 +98,9 @@ public class FileUtils {
             }
         }
         boolean delete = tempFileDir.delete();
-        log.info("jarToLib copy lib to path:【{}】 success", desFile.getAbsolutePath());
+        long end = System.currentTimeMillis();
+        long time = end - start;
+        log.info("jarToLib copy lib to path:【{}】 time consuming:【{}ms】 success", desFile.getAbsolutePath(), time);
         return desFile;
     }
 

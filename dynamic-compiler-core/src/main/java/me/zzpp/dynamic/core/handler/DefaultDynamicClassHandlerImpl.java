@@ -132,7 +132,8 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     }
 
     @Override
-    public Object invoke(String className, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+    @SneakyThrows
+    public Object invoke(String className, String methodName) {
         if (find(className)) return null;
         Class<?> aClass = cacheClass.get(className);
         return invoke(aClass, methodName, InvokeArgs.builder().build(), null);
@@ -146,14 +147,16 @@ public class DefaultDynamicClassHandlerImpl implements DynamicClassHandler {
     }
 
     @Override
-    public Object invoke(String className, String methodName, Class<?>[] parameterTypes, Object[] args) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+    @SneakyThrows
+    public Object invoke(String className, String methodName, Class<?>[] parameterTypes, Object[] args)  {
         if (find(className)) return null;
         Class<?> aClass = cacheClass.get(className);
         return invoke(aClass, methodName, parameterTypes, args);
     }
 
     @Override
-    public Object invoke(Class<?> clz, String methodName) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+    @SneakyThrows
+    public Object invoke(Class<?> clz, String methodName)  {
         return invoke(clz, methodName, InvokeArgs.builder().build(), null);
     }
 
